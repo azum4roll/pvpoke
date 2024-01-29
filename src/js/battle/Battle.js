@@ -512,8 +512,8 @@ function Battle(){
 		}
 
 		// Determine actions for both Pokemon
-		var actionsThisTurn = false;
-		var chargedMoveThisTurn = false;
+		// var actionsThisTurn = false;
+		// var chargedMoveThisTurn = false;
 		var cooldownsToSet = [pokemon[0].cooldown, pokemon[1].cooldown]; // Store cooldown values to set later
 
 		if(turns > lastProcessedTurn){
@@ -524,10 +524,10 @@ function Battle(){
 				var action = self.getTurnAction(poke, opponent);
 
 				if(action){
-					actionsThisTurn = true;
-					if(action.type == "charged"){
-						chargedMoveThisTurn = true;
-					}
+					// actionsThisTurn = true;
+					// if(action.type == "charged"){
+					// 	chargedMoveThisTurn = true;
+					// }
 
 					// Are both Pokemon alive?
 
@@ -606,15 +606,19 @@ function Battle(){
 				}*/
 			}
 
-			if(action.type == "charged"){
-				valid = true;
-			}
+			// if(action.type == "charged"){
+			// 	valid = true;
+			// }
 
-			if(action.type == "wait"){
-				valid = true;
-			}
+			// if(action.type == "wait"){
+			// 	valid = true;
+			// }
 
-			if(action.type == "switch"){
+			// if(action.type == "switch"){
+			// 	valid = true;
+			// }
+
+			if (["charged", "wait", "switch"].includes(action.type)) {
 				valid = true;
 			}
 
@@ -626,7 +630,7 @@ function Battle(){
 		}
 
 		// Sort actions by priority
-		turnActions.sort((a,b) => (a.settings.priority > b.settings.priority) ? -1 : ((b.settings.priority > a.settings.priority) ? 1 : 0));
+		turnActions.sort((a, b) => b.settings.priority - a.settings.priority);
 
 		// Process actions on this turn
 
@@ -638,7 +642,7 @@ function Battle(){
 
 			var action = turnActions[n];
 			var poke = pokemon[action.actor];
-			var opponent = pokemon[ (action.actor == 0) ? 1 : 0 ];
+			var opponent = pokemon[1 - action.actor];
 
 			switch(action.type){
 
@@ -881,7 +885,7 @@ function Battle(){
 				buffs: [pokemon[1].statBuffs[0], pokemon[1].statBuffs[1]],
 				shields: pokemon[0].shields
 			};
-		} else if(battleRatings[1] == battleRatings[0]){
+		} else {
 			winner = {
 				pokemon: false,
 				rating: battleRatings[0]
@@ -1084,7 +1088,7 @@ function Battle(){
 
 		var turnsToLive = Infinity;
 		var queue = [];
-		var moveTurns = poke.fastMove.cooldown / 500;
+		// var moveTurns = poke.fastMove.cooldown / 500;
 
 		// Check if opponent is in the middle of a fast move and adjust accordingly
 		// ELEMENTS OF STATE: POKEMON HP, OPPONENT ENERGY, CURRENT TURN, SHIELDS
