@@ -184,7 +184,7 @@ var RankerMaster = (function () {
 						rankings[i].score = Math.pow( Math.pow(rankings[i].score, 14) * Math.pow(scores[4], 1) * Math.pow(consistencyScore, 1), (1/16));
 					}
 
-					rankings[i].score = Math.floor(rankings[i].score*10) / 10;
+					rankings[i].score = Math.floor(rankings[i].score*100) / 100;
 
 					// Add Pokemon stats
 					rankings[i].stats = {
