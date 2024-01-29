@@ -147,6 +147,8 @@ function Pokemon(id, i, b){
 
 	if(data.levelFloor){
 		this.baseLevelFloor = data.levelFloor;
+	} else if (data.tags && data.tags.indexOf("shadow") > -1) {
+		this.baseLevelFloor = 8;
 	}
 
 	// Set battle moves
@@ -400,7 +402,7 @@ function Pokemon(id, i, b){
         var combinations = [];
 
 		if(sortDirection == -1){
-			bestStat = 10000;
+			bestStat = 100000;
 		}
 
 		var floor = 0;
@@ -431,7 +433,7 @@ function Pokemon(id, i, b){
             while (defIV >= floor) {
                 atkIV = 15;
                 while (atkIV >= floor) {
-					if(targetCP > 500){ // Ignore level floor for Little Cup right now
+					if(targetCP > 0){ // Ignore level floor for Little Cup right now
 						level = self.baseLevelFloor;
 					} else{
 						level = 0.5;
@@ -534,7 +536,7 @@ function Pokemon(id, i, b){
             hpIV--;
         }
 
-		combinations.sort((a,b) => (a[sortStat] > b[sortStat]) ? (-1 * sortDirection) : ((b[sortStat] > a[sortStat]) ? (1 * sortDirection) : 0));
+		combinations.sort((a,b) => (b[sortStat] - a[sortStat]) * sortDirection);
 		results = combinations.splice(0, resultCount);
 
 		return results;
@@ -629,7 +631,7 @@ function Pokemon(id, i, b){
 
 	// Initialize moves and set their respective damage numbers
 
-	this.resetMoves = function(){
+	this.resetMoves = function(lite){
 		for(var i = 0; i < this.fastMovePool.length; i++){
 			this.initializeMove(this.fastMovePool[i]);
 		}
@@ -637,6 +639,8 @@ function Pokemon(id, i, b){
 		for(var i = 0; i < this.chargedMovePool.length; i++){
 			this.initializeMove(this.chargedMovePool[i]);
 		}
+
+		if (lite) return;
 
 		// Set best charged move
 
@@ -662,7 +666,7 @@ function Pokemon(id, i, b){
 				self.activeChargedMoves.push(self.chargedMoves[i]);
 			}
 
-			self.activeChargedMoves.sort((a,b) => (a.energy > b.energy) ? 1 : ((b.energy > a.energy) ? -1 : 0));
+			self.activeChargedMoves.sort((a,b) => a.energy - b.energy);
 
 			self.fastestChargedMove = self.activeChargedMoves[0];
 
@@ -999,7 +1003,7 @@ function Pokemon(id, i, b){
 
 		// Sort charged moves by DPE
 
-		chargedMoves.sort((a,b) => (a.dpe > b.dpe) ? -1 : ((b.dpe > a.dpe) ? 1 : 0));
+		chargedMoves.sort((a,b) => b.dpe - a.dpe);
 
 		var highestDPE = chargedMoves[0].dpe;
 
@@ -1009,44 +1013,65 @@ function Pokemon(id, i, b){
 
 			// Calculate the magnitude of stat changes, factoring in stages and buff chance
 			if(move.buffs){
+				var netBuffCount = 0;
+				var times = 1;
 				for(var n = 0; n < move.buffs.length; n++){
-					// Don't factor self defense drops for move usage
-					if((move.selfDebuffing)&&(n == 1)){
-						continue;
+					var stage = move.buffs[n];
+					// Halve self defense stage drops for move usage
+					if (move.selfDebuffing && (n == 1)) {
+						stage /= 2;
 					}
 
-					if(move.buffs[n] > 0){
+					if(stage > 0){
 						if(move.buffTarget == "self"){
-							statChangeFactor *= ((4+move.buffs[n]) / 4);
+							netBuffCount += stage;
+							statChangeFactor *= ((4 + stage) / 4);
 						} else if(move.buffTarget == "opponent"){
-							statChangeFactor *= (1 / ((4+move.buffs[n]) / 4));
+							netBuffCount -= stage;
+							statChangeFactor *= (1 / ((4 + stage) / 4));
 						}
-					} else if(move.buffs[n] < 0){
+					} else if(stage < 0){
 						if(move.buffTarget == "self"){
-							statChangeFactor *= (4 / (4-move.buffs[n]));
+							netBuffCount += stage;
+							statChangeFactor *= (4 / (4 - stage));
 						} else if(move.buffTarget == "opponent"){
-							statChangeFactor *= (1 / (4 / (4-move.buffs[n])));
+							netBuffCount -= stage;
+							statChangeFactor *= (1 / (4 / (4 - stage)));
 						}
 					}
 				}
-
-				statChangeFactor =  1 + ((statChangeFactor - 1) * move.buffApplyChance);
+				if (netBuffCount > 0) {
+					times = 80 / move.energy;
+				}
+				statChangeFactor =  1 + ((statChangeFactor - 1) * times * move.buffApplyChance);
 			}
 
 			// Calculate usage based on raw damage, efficiency, and speed
 			move.uses = (Math.pow(move.damage, 2) / Math.pow(move.energy, 4)) * Math.pow(statChangeFactor, 2);
 		}
 
-		chargedMoves.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
+		chargedMoves.sort((a,b) => b.uses - a.uses);
 
 		// For moves that have a strictly better preference, sharply reduce usage
 		total = chargedMoves[0].uses;
 
 		for(var i = 1; i < chargedMoves.length; i++){
 			for(var n = 0; n < i; n++){
-				if((chargedMoves[i].type == chargedMoves[n].type)&&(chargedMoves[i].energy >= chargedMoves[n].energy)&&(chargedMoves[i].dpe / chargedMoves[n].dpe < 1.3)){
-					chargedMoves[i].uses *= .5;
-					break;
+				if ((chargedMoves[i].type == chargedMoves[n].type) && (chargedMoves[i].energy >= chargedMoves[n].energy)) {
+					var dpeRatio = chargedMoves[i].dpe / chargedMoves[n].dpe;
+					if (dpeRatio < 1 && !chargedMoves[n].selfDebuffing && !chargedMoves[i].selfBuffing) {
+						// strictly worse move
+						chargedMoves[i].uses = 0;
+						break;
+					} else if (dpeRatio < 1.3 && !chargedMoves[n].selfDebuffing && !chargedMoves[i].selfBuffing) {
+						// mostly worse move
+						chargedMoves[i].uses *= dpeRatio - .8;
+						break;
+					} else {
+						// prefer coverage; still reduce usage a bit
+						chargedMoves[i].uses *= .7;
+						break;
+					}
 				}
 			}
 
@@ -1065,7 +1090,7 @@ function Pokemon(id, i, b){
 			});
 		}
 
-		chargedMoveUses.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
+		chargedMoveUses.sort((a,b) => b.uses - a.uses);
 
 
 		// Calculate TDO for each fast move and sort
@@ -1099,7 +1124,7 @@ function Pokemon(id, i, b){
 			});
 		}
 
-		fastMoveUses.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
+		fastMoveUses.sort((a,b) => b.uses - a.uses);
 
 		var results = {
 			fastMoves: fastMoveUses,
@@ -1794,7 +1819,7 @@ function Pokemon(id, i, b){
 
 	// Resets Pokemon prior to battle
 
-	this.reset = function(){
+	this.reset = function(lite){
 		self.hp = self.startHp;
 		self.energy = self.startEnergy;
 		self.cooldown = self.startCooldown;
@@ -1806,7 +1831,7 @@ function Pokemon(id, i, b){
 			self.changeForm(self.startFormId);
 		}
 
-		self.resetMoves();
+		self.resetMoves(lite);
 	}
 
 	// Fully reset all Pokemon stats
@@ -2161,14 +2186,12 @@ function Pokemon(id, i, b){
 				// Need to reset this number because of how movesets are generated
 				chargedMoves[0].dpe = (chargedMoves[0].damage / chargedMoves[0].energy) * effectivenessScenarios[n][0];
 				chargedMoves[1].dpe = (chargedMoves[1].damage / chargedMoves[1].energy) * effectivenessScenarios[n][1];
-				chargedMoves.sort((a,b) => (a.dpe > b.dpe) ? -1 : ((b.dpe > a.dpe) ? 1 : 0));
 
-				// Factor in Power-Up Punch where Pokemon may be consistent spamming it
-
-				if(chargedMoves[1].moveId == "POWER_UP_PUNCH"){
+				// Factor in Power-Up Punch/Fell Stinger where Pokemon may be consistent spamming it
+				if(chargedMoves[1].moveId == "POWER_UP_PUNCH" || chargedMoves[1].moveId == "FELL_STINGER"){
 					chargedMoves[1].dpe *= 2;
-					chargedMoves.sort((a,b) => (a.dpe > b.dpe) ? -1 : ((b.dpe > a.dpe) ? 1 : 0));
 				}
+				chargedMoves.sort((a,b) => b.dpe - a.dpe);
 
 				// Calculate how much fast move vs charged move damage this Pokemon puts out per cycle
 				var cycleFastMoves = Math.ceil(chargedMoves[0].energy / fastMove.energyGain);
