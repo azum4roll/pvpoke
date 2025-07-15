@@ -257,7 +257,7 @@ function interfaceObject(){
 			ranker.setMoveOverrides(battle.getCP(), "custom", overrides);
 
 			generateRankings(null, data);
-		} else if(ranker.getMoveSelectMode() == "force"){
+		} else if(ranker.getMoveSelectMode() == "force") {
 			$(".button.simulate").html("Simulate");
 			$(".custom-rankings-results").show();
 			$(".custom-rankings-list").show();
@@ -341,13 +341,17 @@ function interfaceObject(){
 
 		var list = [];
 
-		for(var i = 0; i < Math.min(data.length,100); i++){
+		for(var i = 0; i < Math.min(data.length,500); i++){
 			var r = data[i];
 
 			var pokemon = new Pokemon(r.speciesId, 0, battle);
 			pokemon.initialize();
 			pokemon.selectMove("fast", r.moveset[0]);
-			pokemon.selectMove("charged", r.moveset[1], 0);
+			if (r.moveset[1]) {
+				pokemon.selectMove("charged", r.moveset[1], 0);
+			} else {
+				pokemon.selectMove("charged", "none", 0);
+			}
 
 			if(r.moveset.length > 2){
 				pokemon.selectMove("charged", r.moveset[2],1);
@@ -634,7 +638,7 @@ function interfaceObject(){
 		for(var i = 0; i < group.length; i++){
 			var chargedMoves = [];
 			for(n = 0; n < group[i].chargedMoves.length; n++){
-				chargedMoves.push(group[i].chargedMoves[n].moveId);
+				if (group[i].chargedMoves[n]) chargedMoves.push(group[i].chargedMoves[n].moveId);
 			}
 
 			var obj = {

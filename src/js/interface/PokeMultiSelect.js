@@ -16,7 +16,7 @@ function PokeMultiSelect(element){
 	var selectedIndex = -1;
 	var pokeSelector;
 
-	var maxPokemonCount = 100;
+	var maxPokemonCount = 500;
 	var selectedGroup = "";
 	var selectedGroupType = "";
 	var pokebox;
@@ -537,14 +537,12 @@ function PokeMultiSelect(element){
 				pokemon.initialize(battle.getCP());
 				pokemon.selectMove("fast", data[i].fastMove);
 
-				for(var n = 0; n < 3; n++){
-
+				for (let n = 2; n >= 0; n--) {
 					if(n < data[i].chargedMoves.length){
 						pokemon.selectMove("charged", data[i].chargedMoves[n], n);
 					} else{
 						pokemon.selectMove("charged", "none", n);
 					}
-
 				}
 
 				if(data[i].ivs){
