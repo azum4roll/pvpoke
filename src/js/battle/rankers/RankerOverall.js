@@ -212,7 +212,7 @@ var RankerMaster = (function () {
 					}
 					
 					// Final score rounding
-					rankings[i].score = Math.floor(rankings[i].score*10) / 10;
+					rankings[i].score = Math.floor(rankings[i].score*100) / 100;
 
 					// Add Pokemon stats
 					rankings[i].stats = {

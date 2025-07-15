@@ -249,7 +249,7 @@ function interfaceObject(){
 			ranker.setMoveOverrides(battle.getCP(), "custom", overrides);
 
 			generateRankings(null, data);
-		} else if(ranker.getMoveSelectMode() == "force"){
+		} else if(ranker.getMoveSelectMode() == "force") {
 			$(".button.simulate").html("Simulate");
 			$(".custom-rankings-results").show();
 			$(".custom-rankings-list").show();
@@ -333,7 +333,7 @@ function interfaceObject(){
 
 		var list = [];
 
-		for(var i = 0; i < Math.min(data.length,100); i++){
+		for(var i = 0; i < Math.min(data.length,500); i++){
 			var r = data[i];
 
 			var pokemon = new Pokemon(r.speciesId, 0, battle);
