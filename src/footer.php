@@ -10,9 +10,7 @@
 
 	<?php
 	// Localhost developer panel
-	if (strpos($WEB_ROOT, 'src') !== false) {
 	    require 'modules/developer-panel.php';
-	}
 	?>
 
 	<footer>

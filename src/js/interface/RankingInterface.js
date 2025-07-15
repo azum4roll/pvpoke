@@ -269,7 +269,8 @@ var InterfaceMaster = (function () {
 
 				pokemon.initialize(true);
 				pokemon.selectMove("fast", r.moveset[0]);
-				pokemon.selectMove("charged", r.moveset[1], 0);
+				if (r.moveset[1])
+					pokemon.selectMove("charged", r.moveset[1], 0);
 
 				if(r.moveset.length > 2){
 					pokemon.selectMove("charged", r.moveset[2],1);
@@ -812,7 +813,8 @@ var InterfaceMaster = (function () {
 				var pokemon = new Pokemon(r.speciesId, 0, battle);
 				pokemon.initialize(battle.getCP(), "gamemaster");
 				pokemon.selectMove("fast", r.moveset[0]);
-				pokemon.selectMove("charged", r.moveset[1], 0);
+				if (r.moveset[1])
+					pokemon.selectMove("charged", r.moveset[1], 0);
 
 				if(r.moveset.length > 2){
 					pokemon.selectMove("charged", r.moveset[2],1);
@@ -954,7 +956,7 @@ var InterfaceMaster = (function () {
 
 					$moveDetails.addClass(fastMoves[n].type);
 					$moveDetails.find(".name").html(fastMoves[n].displayName);
-					$moveDetails.find(".archetype .name").html(archetype);
+					$moveDetails.find(".archetype .name").html(percentStr + archetype);
 					$moveDetails.find(".archetype .icon").addClass(archetypeClass);
 					$moveDetails.find(".dpt .value").html(Math.round( ((fastMoves[n].power * fastMoves[n].stab * pokemon.shadowAtkMult) / (fastMoves[n].cooldown / 500)) * 100) / 100);
 					$moveDetails.find(".ept .value").html(Math.round( (fastMoves[n].energyGain / (fastMoves[n].cooldown / 500)) * 100) / 100);
@@ -1044,7 +1046,7 @@ var InterfaceMaster = (function () {
 
 					$moveDetails.addClass(chargedMoves[n].type);
 					$moveDetails.find(".name").html(chargedMoves[n].displayName);
-					$moveDetails.find(".archetype .name").html(archetype);
+					$moveDetails.find(".archetype .name").html(percentStr + archetype);
 					$moveDetails.find(".archetype .icon").addClass(archetypeClass);
 					$moveDetails.find(".damage .value").html(Math.round((chargedMoves[n].power * chargedMoves[n].stab * pokemon.shadowAtkMult) * 100) / 100);
 					$moveDetails.find(".energy .value").html(chargedMoves[n].energy);
