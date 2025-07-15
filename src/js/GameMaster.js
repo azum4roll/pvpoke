@@ -66,7 +66,7 @@ var GameMaster = (function () {
 
 				if(settings.gamemaster == "gamemaster"){
 					// Sort Pokemon alphabetically for searching
-					object.data.pokemon.sort((a,b) => (a.speciesName > b.speciesName) ? 1 : ((b.speciesName > a.speciesName) ? -1 : 0));
+					// object.data.pokemon.sort((a,b) => (a.speciesName > b.speciesName) ? 1 : ((b.speciesName > a.speciesName) ? -1 : 0));
 
 					object.createPokeSelectList();
 
@@ -466,9 +466,7 @@ var GameMaster = (function () {
 
 			object.data.pokemon.sort((a,b) => (a.dex > b.dex) ? 1 : ((b.dex > a.dex) ? -1 : 0));
 
-			var json = JSON.stringify(object.data.pokemon);
-
-			console.log(json);
+			console.log(prettyPrintArray(object.data.pokemon));
 		}
 
 		// Generate default IVs for a single Pokemon entry
@@ -515,17 +513,7 @@ var GameMaster = (function () {
 							}
 						}
 					} else{
-						// Attempt to generate IV combo without level floor
-						pokemon.baseLevelFloor = 1;
-
-						combo = object.generateDefaultIVCombo(pokemon, pokemon.levelCap, leagues[i], level45cp);
-
-						if(combo){
-							defaultIVs["cp"+leagues[i]] = [combo.level, combo.ivs.atk, combo.ivs.def, combo.ivs.hp]
-						} else{
-							defaultIVs["cp"+leagues[i]] = [1, 0, 0, 0];
-						}
-						
+						defaultIVs["cp"+leagues[i]] = [1, 0, 0, 0];
 					}
 				} else{
 					defaultIVs["cp"+leagues[i]] = [pokemon.levelCap, 15, 15, 15];
@@ -580,12 +568,16 @@ var GameMaster = (function () {
 				floor = 6;
 			}
 
+			if (pokemon.hasTag("raidexclusive") && pokemon.hasTag("shadow")) {
+				floor = 6;
+			}
+
 			pokemon.setLevelCap(levelCap);
 
 			var combinations = pokemon.generateIVCombinations("overall", 1, 4096, null, floor);
 
 			// For untradable Pokemon, set the index to the 32nd rank
-			if(pokemon.hasTag("untradeable")){
+			if (pokemon.hasTag("untradeable")) {
 				defaultIndex = 31;
 			}
 
@@ -1118,21 +1110,25 @@ var GameMaster = (function () {
 
 			// Gather all eligible Pokemon
 
-			var minStats = 4900; // You must be this tall to ride this ride
+			var minStats = 4400; // You must be this tall to ride this ride
+			var minCp = 2500;
 
 			if(battle.getCP() == 500){
-				minStats = 0;
+				minStats = 400;
+				minCp = 490;
 			} else if(battle.getCP() == 1500){
-				minStats = 1370;
+				minStats = 1600;
+				minCp = 1400;
 			} else if(battle.getCP() == 2500){
 				minStats = 2800;
+				minCp = 2400;
 			}
 
 			if(! excludeByStatProduct){
 				minStats = 0;
 			}
 
-			var bannedList = ["mewtwo","mewtwo_armored","giratina_altered","groudon","kyogre","palkia","dialga","cobalion","terrakion","virizion","tornadus_therian","tornadus_therian_xl", "landorus_therian", "reshiram", "zekrom", "kyurem", "genesect_burn", "xerneas", "thundurus_therian", "yveltal", "meloetta_aria", "zacian", "zamazenta", "zacian_hero", "zamazenta_hero", "genesect_douse", "zarude", "hoopa_unbound", "genesect_shock", "tapu_koko", "tapu_lele", "tapu_bulu", "nihilego", "genesect_chill", "solgaleo", "lunala", "keldeo_ordinary", "kyogre_primal", "groudon_primal", "zygarde_complete", "enamorus_therian", "enamorus_incarnate", "dialga_origin", "palkia_origin", "necrozma", "necrozma_dawn_wings", "necrozma_dusk_mane", "marshadow", "kyurem_black", "kyurem_white", "zacian_crowned_sword", "zamazenta_crowned_shield", "eternatus", "sinistcha", "keldeo_resolute"];
+			var bannedList = [];
 
 			// Aggregate filters
 
@@ -1142,6 +1138,7 @@ var GameMaster = (function () {
 			];
 
 			var pokemonList = [];
+			var shadowList = [];
 
 			for(var i = 0; i < object.data.pokemon.length; i++){
 
@@ -1150,11 +1147,13 @@ var GameMaster = (function () {
 
 				var stats = (pokemon.stats.hp * pokemon.stats.atk * pokemon.stats.def) / 1000;
 
-				if(stats >= minStats || battle.getCup().includeLowStatProduct ||
-				 ( battle.getCP() == 1500 && pokemon.hasTag("include1500"))
-				 	|| ( battle.getCP() == 2500 && pokemon.hasTag("include2500")) 
-					|| ( battle.getCP() == 10000 && pokemon.hasTag("include10000")) 
-					|| pokemon.hasTag("mega") ){
+				if ((stats >= minStats) ||
+				 (pokemon.cp >= minCp) ||
+				 ((battle.getCP() == 500) && (pokemon.hasTag("include500") || pokemon.hasTag("mega") )) ||
+				 ((battle.getCP() == 1500) && (pokemon.hasTag("include1500") || pokemon.hasTag("mega") )) ||
+				 ((battle.getCP() == 2500) && (pokemon.hasTag("include2500"))) ||
+				 ((battle.getCP() == 10000) && (pokemon.hasTag("include10000"))) ||
+				 battle.getCup().includeLowStatProduct) {
 					// Today is the day
 					if(! pokemon.released){
 						continue;
@@ -1182,6 +1181,7 @@ var GameMaster = (function () {
 						var include = (n == 0);
 						var filtersMatched = 0;
 						var requiredFilters = filters.length;
+						var dexFilters = 0;
 
 						for(var j = 0; j < filters.length; j++){
 							var filter = filters[j];
@@ -1203,6 +1203,7 @@ var GameMaster = (function () {
 									break;
 
 								case "dex":
+									dexFilters++;
 									if((pokemon.dex >= filter.values[0])&&(pokemon.dex <= filter.values[1])){
 										filtersMatched++;
 									}
@@ -1274,9 +1275,12 @@ var GameMaster = (function () {
 							}
 						}
 
-						// Only include Pokemon that match all of the include filters
+						if (dexFilters >= 2) {
+							requiredFilters -= dexFilters - 1;
+						}
 
-						if((include)&&(filtersMatched >= requiredFilters)){
+						// Only include Pokemon that match any of the include filters
+						if (include && (filtersMatched >= 1 || requiredFilters == 0)) {
 							allowed = true;
 						}
 
@@ -1297,8 +1301,8 @@ var GameMaster = (function () {
 								if(pokemon.speciesId == rankingData[n].speciesId){
 
 									// Sort by uses
-									var fastMoves = rankingData[n].moves.fastMoves;
-									var chargedMoves = rankingData[n].moves.chargedMoves;
+									var fastMoves = rankingData[n].moves.fastMoves.slice();
+									var chargedMoves = rankingData[n].moves.chargedMoves.slice();
 
 									fastMoves.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
 									chargedMoves.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
@@ -1318,10 +1322,18 @@ var GameMaster = (function () {
 						}
 
 						pokemonList.push(pokemon);
+						if (pokemon.hasTag("shadow")) {
+							shadowList.push(pokemon.speciesId.replace("_shadow",""));
+						}
 					}
 				}
 			}
 
+			pokemonList.forEach(pokemon => {
+				if (pokemon.hasTag("shadow") || shadowList.includes(pokemon.speciesId)) {
+					pokemon.hasShadow = true;
+				}
+			});
 			return pokemonList;
 		}
 
@@ -1758,6 +1770,10 @@ var GameMaster = (function () {
 								if(pokemonList[n].chargedMoves.length < 2){
 									pokemon.selectMove("charged", "none", 1);
 								}
+
+								if (pokemonList[n].chargedMoves.length < 1) {
+									pokemon.selectMove("charged", "none", 0);
+								}
 							}
 
 							// Set weight modifier
@@ -1785,3 +1801,19 @@ var GameMaster = (function () {
         }
     };
 })();
+
+function prettyPrintArray(obj, space = 4) {
+	return JSON.stringify(obj, (_, value) => {
+		if (Array.isArray(value)) {
+			const isSimple = value.every(v =>
+				typeof v === 'string' || typeof v === 'number'
+			);
+			if (isSimple) return JSON.stringify(value);
+		}
+		return value;
+	}, space)
+		.replace(/"(\[)/g, '$1') // Replace "[ with ["
+		.replace(/(\])"/g, '$1') // Replace ]" with ]"
+		.replace(/\\"/g, '"') // Replace escaped quotes with normal quotes
+		.replace(/,(?=[^\n])/g, ', '); // Add space after commas in arrays
+}
