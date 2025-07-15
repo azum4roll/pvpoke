@@ -39,6 +39,36 @@ var RankerMaster = (function () {
 
 			var overrides = []; // Moveset override data
 
+			var moveUsageCache = {};
+
+			this.getMoveUsage = (pokemon, opponent, weight) => {
+				let usage = {fastMoves: [], chargedMoves: []};
+				if (moveUsageCache[pokemon.speciesId] && moveUsageCache[pokemon.speciesId][opponent.speciesId]) {
+					usage = moveUsageCache[pokemon.speciesId][opponent.speciesId];
+				} else {
+					usage = pokemon.generateMoveUsage(opponent);
+					if (!moveUsageCache[pokemon.speciesId]) {
+						moveUsageCache[pokemon.speciesId] = {};
+					}
+					moveUsageCache[pokemon.speciesId][opponent.speciesId] = usage;
+				}
+				if (weight === undefined || weight === 1) return usage;
+				let weightedUsage = {fastMoves: [], chargedMoves: []};
+				weightedUsage.fastMoves = usage.fastMoves.map(fastMove => {
+					return {
+						moveId: fastMove.moveId,
+						uses: fastMove.uses * weight,
+					}
+				});
+				weightedUsage.chargedMoves = usage.chargedMoves.map(chargeMove => {
+					return {
+						moveId: chargeMove.moveId,
+						uses: chargeMove.uses * weight,
+					}
+				});
+				return weightedUsage;
+			};
+
 			// Load existing rankings to get best movesets
 
 			this.displayRankingData = function(data, callback){
@@ -48,10 +78,11 @@ var RankerMaster = (function () {
 
 				currentScenarioIndex = 0;
 
-				if(! scenarios){
-					scenarios = GameMaster.getInstance().data.rankingScenarios;
+				if (!scenarios) {
+					scenarios = [GameMaster.getInstance().data.rankingScenarios[0]];
 				}
 
+				startTime = Date.now();
 				for(currentScenarioIndex = 0; currentScenarioIndex < scenarios.length; currentScenarioIndex++){
 					var r = self.rank(leagues[currentLeagueIndex], scenarios[currentScenarioIndex]);
 
@@ -61,6 +92,7 @@ var RankerMaster = (function () {
 						allResults.push(r);
 					}
 				}
+				console.log("Total time: " + (Date.now() - startTime));
 
 				if(callback){
 					callback(allResults);
@@ -75,6 +107,7 @@ var RankerMaster = (function () {
 
 				// Gather all eligible Pokemon
 				battle.setCP(cp);
+				console.log(moveSelectMode);
 
 				if(moveSelectMode == "auto"){
 					pokemonList = gm.generateFilteredPokemonList(battle, cup.include, cup.exclude);
@@ -145,8 +178,8 @@ var RankerMaster = (function () {
 				leagues = [cp];
 				allResults = [];
 
-				if(! scenarios){
-					scenarios = GameMaster.getInstance().data.rankingScenarios;
+				if (!scenarios) {
+					scenarios = [GameMaster.getInstance().data.rankingScenarios[0]];
 				}
 
 				for(var currentLeagueIndex = 0; currentLeagueIndex < leagues.length; currentLeagueIndex++){
@@ -264,8 +297,8 @@ var RankerMaster = (function () {
 						battle.setNewPokemon(pokemon, 0, false);
 						battle.setNewPokemon(opponent, 1, false);
 
-						pokemon.reset();
-						opponent.reset();
+						pokemon.reset(true);
+						opponent.reset(true);
 
 						// Initialize values
 						var healthRating = 500;
@@ -278,8 +311,6 @@ var RankerMaster = (function () {
 						var opRating = 500;
 
 						var turnsToWin = 1;
-						var turnRatio = 1;
-						var opTurnRatio = 1;
 
 						var winMultiplier = 1;
 						var opWinMultiplier = 1;
@@ -322,37 +353,38 @@ var RankerMaster = (function () {
 
 							// Calculate Battle Rating for each Pokemon
 
-							healthRating = (pokemon.hp / pokemon.stats.hp);
-							damageRating = ((opponent.stats.hp - opponent.hp) / (opponent.stats.hp));
+							healthRating = pokemon.hp / pokemon.stats.hp;
+							opHealthRating = opponent.hp / opponent.stats.hp;
 
-							opHealthRating = (opponent.hp / opponent.stats.hp);
-							opDamageRating = ((pokemon.stats.hp - pokemon.hp) / (pokemon.stats.hp));
+							damageRating = 1 - opHealthRating;
+							opDamageRating = 1 - healthRating;
 
 							rating = Math.floor( (healthRating + damageRating) * 500);
 							opRating = Math.floor( (opHealthRating + opDamageRating) * 500);
 
 							turnsToWin = battle.getTurnsToWin();
-							turnRatio = turnsToWin[0] / turnsToWin[1];
-							opTurnRatio = turnsToWin[1] / turnsToWin[0];
 
 							// Modify ratings by shields burned and shields remaining
 
-							winMultiplier = 1;
-							opWinMultiplier = 1;
+							// winMultiplier = 1;
+							// opWinMultiplier = 1;
 
-							if(rating > opRating){
-								opWinMultiplier = 0;
-							} else{
-								winMultiplier = 0;
-							}
+							// if(rating > opRating){
+							// 	opWinMultiplier = 0;
+							// } else{
+							// 	winMultiplier = 0;
+							// }
+
+							winMultiplier = (rating > opRating) ? 1 : 0;
+							opWinMultiplier = 1 - winMultiplier;
 
 							if(rating == 500){
 								winMultiplier = 0;
 								opWinMultiplier = 0;
 							}
 
-							adjRating = rating + ( (100 * (opponent.startingShields - opponent.shields) * winMultiplier) + (100 * pokemon.shields * winMultiplier));
-							adjOpRating = opRating + ( (100 * (pokemon.startingShields - pokemon.shields) * opWinMultiplier) + (100 * opponent.shields * opWinMultiplier));
+							adjRating = rating + 100 * winMultiplier * (opponent.startingShields - opponent.shields + pokemon.shields);
+							adjOpRating = opRating + 100 * opWinMultiplier * (pokemon.startingShields - pokemon.shields + opponent.shields);
 						}
 
 						// Push final results into the rank object's matches array
@@ -363,8 +395,8 @@ var RankerMaster = (function () {
 							adjRating: adjRating,
 							opRating: opRating,
 							adjOpRating: adjOpRating,
-							moveUsage: pokemon.generateMoveUsage(opponent, opponent.weightModifier),
-							oppMoveUsage: opponent.generateMoveUsage(pokemon, pokemon.weightModifier)
+							moveUsage: this.getMoveUsage(pokemon, opponent, opponent.weightModifier),
+							oppMoveUsage: this.getMoveUsage(opponent, pokemon, pokemon.weightModifier)
 						});
 
 						avg += adjRating;
@@ -412,8 +444,8 @@ var RankerMaster = (function () {
 
 					// Sort move arrays and add them to the rank object
 
-					fastMoves.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
-					chargedMoves.sort((a,b) => (a.uses > b.uses) ? -1 : ((b.uses > a.uses) ? 1 : 0));
+					fastMoves.sort((a,b) => b.uses - a.uses);
+					chargedMoves.sort((a,b) => b.uses - a.uses);
 
 					rankObj.moves = {fastMoves: fastMoves, chargedMoves: chargedMoves};
 
@@ -428,12 +460,12 @@ var RankerMaster = (function () {
 
 				// Iterate through the rankings and weigh each matchup Battle Rating by the average rating of the opponent
 
-				var rankCutoffIncrease = 0.06;
+				var rankCutoffIncrease = 0.02;
 				var rankWeightExponent = 1.65;
 
 
 				if(cup.name == "custom"){
-					iterations = 7;
+					iterations = 25;
 				}
 
 				for(var n = 0; n < iterations; n++){
@@ -455,17 +487,17 @@ var RankerMaster = (function () {
 							}
 
 							// Don't score Pokemon in the mirror match
-
 							if(targets[j].speciesId == pokemonList[i].speciesId){
 								weight = 0;
 							}
 
-							if (typeof targets[j].weightModifier !== 'undefined') {
-								weight *= targets[j].weightModifier;
-							} else{
-								if((cup.name == "all")&&(battle.getCP() == 1500)){
-									weight = 0;
-								}
+							// Don't score teambuilderexclude Pokemon
+							if(targets[j].hasTag("teambuilderexclude")){
+								weight = 0;
+							}
+
+							if((cup.name == "all")&&(battle.getCP() == 1500)){
+								weight = 0;
 							}
 
 							// Implement scoring soft cap, reduce impact of wins over 700 to reduce scores for volatile Pokemon (hard win/hard loss)
@@ -484,8 +516,19 @@ var RankerMaster = (function () {
 								weight *= (1 + (Math.pow(500 - matches[j].adjRating, 2)/20000));
 							}
 
+							var opScore = 1000 - matches[j].adjRating * weight;
+							var opScore2 = (1000 - matches[j].adjRating) * weight;
+
+							if (typeof targets[j].weightModifier !== 'undefined') {
+								weight *= targets[j].weightModifier;
+							}
+
+							// Halve weight for shadows (and corresponding non-shadow)
+							if (targets[j].hasShadow) {
+								weight /= 2;
+							}
+
 							var sc = matches[j].adjRating * weight;
-							var opScore = matches[j].adjOpRating * Math.pow(4, weight);
 
 							if(rankings[j].scores[n] / bestScore < .1 + (rankCutoffIncrease * n)){
 								weight = 0;
@@ -494,6 +537,7 @@ var RankerMaster = (function () {
 							weights += weight;
 							matches[j].score = sc;
 							matches[j].opScore = opScore;
+							matches[j].opScore2 = opScore2;
 							score += sc;
 						}
 
@@ -510,8 +554,11 @@ var RankerMaster = (function () {
 					var pokemon = pokemonList[i];
 
 					// If data is available, take existing move use data
+					rankings[i].moveset = [pokemon.fastMove.moveId];
 
-					rankings[i].moveset = [pokemon.fastMove.moveId, pokemon.chargedMoves[0].moveId];
+					if (pokemon.chargedMoves[0]) {
+						rankings[i].moveset.push(pokemon.chargedMoves[0].moveId);
+					}
 
 					if(pokemon.chargedMoves[1]){
 						rankings[i].moveset.push(pokemon.chargedMoves[1].moveId);
@@ -542,7 +589,7 @@ var RankerMaster = (function () {
 
 					var matches = rankings[i].matches;
 
-					rankings[i].matches.sort((a,b) => (a.opScore > b.opScore) ? -1 : ((b.opScore > a.opScore) ? 1 : 0));
+					rankings[i].matches.sort((a,b) => b.opScore2 - a.opScore2);
 
 					var matchupCount = Math.min(5, rankings[i].matches.length);
 					var keyMatchupsCount = 0;
@@ -571,11 +618,11 @@ var RankerMaster = (function () {
 					}
 
 					// Sort key counters by battle rating
-					rankings[i].counters.sort((a,b) => (a.rating > b.rating) ? 1 : ((b.rating > a.rating) ? -1 : 0));
+					rankings[i].counters.sort((a,b) => a.rating - b.rating);
 
 					// Gather 5 best matchups, weighted by opponent rank
 
-					rankings[i].matches.sort((a,b) => (a.score > b.score) ? -1 : ((b.score > a.score) ? 1 : 0));
+					rankings[i].matches.sort((a,b) => a.opScore - b.opScore);
 
 					keyMatchupsCount = 0;
 
@@ -601,7 +648,7 @@ var RankerMaster = (function () {
 					}
 
 					// Sort key matchups by battle rating
-					rankings[i].matchups.sort((a,b) => (a.rating > b.rating) ? -1 : ((b.rating > a.rating) ? 1 : 0));
+					rankings[i].matchups.sort((a,b) => b.rating - a.rating);
 
 					delete rankings[i].matches;
 					//delete rankings[i].movesets;
@@ -610,14 +657,14 @@ var RankerMaster = (function () {
 
 				// Sort rankings by best to worst
 
-				rankings.sort((a,b) => (a.score > b.score) ? -1 : ((b.score > a.score) ? 1 : 0));
+				rankings.sort((a, b) => b.score - a.score);
 
 				// Scale all scores on scale of 100;
 
 				var highest = rankings[0].score;
 
 				for(var i = 0; i < rankings.length; i++){
-					rankings[i].score = Math.floor((rankings[i].score / highest) * 1000) / 10;
+					rankings[i].score = Math.floor((rankings[i].score / highest) * 10000) / 100;
 				}
 
 				// Write rankings to file
